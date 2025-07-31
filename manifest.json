@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "WhatsApp Bulk Message Sender powered by OmniCan.ca",
+  "name": "WhatsApp Bulk Message Sender",
   "version": "1.0.0",
   "description": "Send bulk WhatsApp messages with ease - Excel import, personalization, and smart delays",
   "default_locale": "en",
@@ -49,9 +49,9 @@
     {
       "resources": [
         "js/load.js",
+        "js/webResource.js",
         "css/addon-css/*.css",
-        "assets/*.png",
-        "js/webResource.js"
+        "assets/*"
       ],
       "matches": ["<all_urls>"]
     }
