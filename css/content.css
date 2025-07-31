@@ -1,75 +1,228 @@
-@import url("https://fonts.googleapis.com/css2?family=Palanquin+Dark:wght@400;500;700&display=swap");
-@import url("https://fonts.googleapis.com/css2?family=PT+Sans+Caption&display=swap");
+/* Simplified content.css - Clean, modern styles */
 
-.modal {
-  font-family: "PT Sans Caption", sans-serif !important;
-  display: block;
-  position: fixed;
-  z-index: 100;
-  padding-top: 100px;
-  left: 0;
-  top: 0;
-  width: 100%;
-  height: 100%;
-  overflow: auto;
-  background-color: rgb(0, 0, 0);
-  background-color: rgba(0, 0, 0, 0.4);
+/* Toast Notifications */
+.wa-toast {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: #fff;
+    border-radius: 8px;
+    padding: 16px 24px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    z-index: 10000;
+    animation: slideIn 0.3s ease;
+    max-width: 350px;
 }
 
-.modal-content {
-  background-color: #fefefe;
-  margin: auto;
-  padding: 20px;
-  border: 1px solid #888;
-  width: 80%;
+.wa-toast.success {
+    border-left: 4px solid #25D366;
 }
 
-.close {
-  color: #aaaaaa;
-  float: right;
-  font-size: 28px;
-  font-weight: bold;
+.wa-toast.error {
+    border-left: 4px solid #DC3545;
 }
 
-.close:hover,
-.close:focus {
-  color: #000;
-  text-decoration: none;
-  cursor: pointer;
+.wa-toast.info {
+    border-left: 4px solid #0088cc;
 }
 
-.CtaBtn:hover {
-  filter: brightness(1.2);
+@keyframes slideIn {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
 }
 
-.CtaBtn:active {
-  filter: brightness(0.8);
+/* Progress Overlay */
+.wa-progress-overlay {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: #fff;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+    min-width: 300px;
+    z-index: 9999;
 }
 
-.CtaCloseBtn {
-  border-radius: 50%;
-  padding: 0px 3px;
-  display: grid;
-  place-items: center;
-  padding: 10px;
-  margin: -10px;
-  cursor: pointer;
-  filter: invert(0.9);
+.wa-progress-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
 }
 
-.CtaCloseBtn:hover {
-  filter: invert(0.5);
+.wa-progress-title {
+    font-weight: 600;
+    color: #075E54;
 }
 
-.CtaCloseBtn:active {
-  filter: invert(0);
+.wa-progress-bar {
+    height: 8px;
+    background: #E9ECEF;
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 8px;
 }
 
-.CtaDeleteBtn:hover {
-  background: red;
-  color: white !important;
+.wa-progress-fill {
+    height: 100%;
+    background: #25D366;
+    border-radius: 4px;
+    transition: width 0.3s ease;
 }
 
-footer._3E8Fg {
-  background-color: var(--rich-text-panel-background) !important;
+.wa-progress-stats {
+    display: flex;
+    justify-content: space-between;
+    font-size: 14px;
+    color: #6C757D;
+}
+
+/* Privacy Blur Styles */
+.privacy-blur-enabled .message-in .copyable-text,
+.privacy-blur-enabled .message-out .copyable-text {
+    filter: blur(5px);
+    transition: filter 0.2s ease;
+}
+
+.privacy-blur-enabled .message-in .copyable-text:hover,
+.privacy-blur-enabled .message-out .copyable-text:hover {
+    filter: none;
+}
+
+.privacy-blur-enabled ._3Oo-r {
+    filter: blur(8px);
+    transition: filter 0.2s ease;
+}
+
+.privacy-blur-enabled ._3Oo-r:hover {
+    filter: none;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+    width: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #25D366;
+    border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #128C7E;
+}
+
+/* Attachment Badge */
+.wa-attachment-badge {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: #25D366;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+/* Loading Spinner */
+.wa-spinner {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 3px solid #f3f3f3;
+    border-top: 3px solid #25D366;
+    border-radius: 50%;
+    animation: wa-spin 1s linear infinite;
+}
+
+@keyframes wa-spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Status Indicators */
+.wa-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    border-radius: 16px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.wa-status.active {
+    background: #D4EDDA;
+    color: #155724;
+}
+
+.wa-status.paused {
+    background: #FFF3CD;
+    color: #856404;
+}
+
+.wa-status.stopped {
+    background: #F8D7DA;
+    color: #721C24;
+}
+
+/* Floating Action Button */
+.wa-fab {
+    position: fixed;
+    bottom: 80px;
+    right: 20px;
+    width: 56px;
+    height: 56px;
+    background: #25D366;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    box-shadow: 0 4px 12px rgba(37, 211, 102, 0.4);
+    cursor: pointer;
+    transition: all 0.3s ease;
+    z-index: 9998;
+}
+
+.wa-fab:hover {
+    transform: scale(1.1);
+    box-shadow: 0 6px 20px rgba(37, 211, 102, 0.5);
+}
+
+/* Message Preview */
+.wa-message-preview {
+    background: #E8F5E9;
+    border-radius: 8px;
+    padding: 12px;
+    margin: 10px 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    position: relative;
+}
+
+.wa-message-preview::before {
+    content: "Preview";
+    position: absolute;
+    top: -8px;
+    left: 12px;
+    background: white;
+    padding: 0 8px;
+    font-size: 12px;
+    color: #25D366;
+    font-weight: 600;
 }

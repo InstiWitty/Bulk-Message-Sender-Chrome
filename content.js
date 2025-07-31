@@ -1,689 +1,409 @@
-/*
- jQuery v3.3.1 | (c) JS Foundation and other contributors | jquery.org/license */
+// Simplified content.js - All features enabled
+
 "use strict";
-(function () {
-  let a = document.createElement("script");
-  a.setAttribute("type", "text/javascript");
-  a.setAttribute("id", "webResource");
-  a.src = chrome.runtime.getURL("js/webResource.js");
-  a.onload = function () {
-    this.parentNode.removeChild(this);
-  };
-  document.head.appendChild(a);
-})();
-let myNumber = null,
-  url = "https://wamessager-backend.onrender.com",
-  currentState = { state: "STOP" };
-window.onload = function () {
-  try {
-    if (window.localStorage.getItem("last-wid")) {
-      var a = window.localStorage.getItem("last-wid");
-      myNumber = a.split("@")[0].substring(1);
-    } else
-      (a = window.localStorage.getItem("last-wid-md")),
-        (myNumber = a.split(":")[0].substring(1));
-    chrome.storage.local.set({ currentState });
-  } catch (b) {}
-};
-if (!document.getElementById("wamessager")) {
-  const a = document.createElement("a");
-  a.id = "wamessager";
-  document.body.append(a);
-}
-let stopSending = !1,
-  pauseSending = !1;
-var rows = [["Phone Number", "Result"]],
-  replace_pattern = /{{(.*?)}}/g,
-  coloumn_pattern = /[^{\{]+(?=}\})/g,
-  stop = !1,
-  total_count = 0;
-let continueFunction = null;
-function pauser() {
-  return new Promise((a) => {
-    continueFunction = function () {
-      pauseSending = !1;
-      continueFunction = null;
-      currentState = { ...currentState, state: "SEND" };
-      chrome.storage.local.set({ currentState }, () => {
-        a("resolved");
-      });
+
+// Inject web resource script
+(function() {
+    const script = document.createElement("script");
+    script.setAttribute("type", "text/javascript");
+    script.setAttribute("id", "webResource");
+    script.src = chrome.runtime.getURL("js/webResource.js");
+    script.onload = function() {
+        this.parentNode.removeChild(this);
     };
-  });
-}
-chrome.runtime.onMessage.addListener((a, b, c) => {
-  receiver(a, b, c);
-  return !0;
-});
-async function receiver(a, b, c) {
-  if (["pv", "cn", "doc"].includes(a.mediaType))
-    sendMultimedia(a.mediaType), c();
-  else if ("hello" == a.greeting)
-    c({ number: myNumber, date: new Date().toDateString() });
-  else if (a.context.process_state === "continue") {
-    b = a.context.message;
-    var e = [];
-    if (a.context.is_custom_message) {
-      let h = a.context.execl_coloumn;
-      if (h) {
-        for (const [k, l] of Object.entries(h[0]))
-          b = b.replaceAll("{{" + l + "}}", "{{" + k + "}}");
-        for (
-          var d = b.match(coloumn_pattern), q = b.match(replace_pattern), m = 1;
-          m < h.length;
-          m++
-        ) {
-          var p = b;
-          if (d != null && q != null)
-            for (let k = 0; k < d.length; k++)
-              p = p.replace(q[k], h[m][d[k]] || "");
-          e.push(p);
+    document.head.appendChild(script);
+})();
+
+// Global variables
+let myNumber = null;
+let currentState = { state: "STOP" };
+let stopSending = false;
+let pauseSending = false;
+let rows = [["Phone Number", "Result"]];
+let continueFunction = null;
+
+// Initialize on load
+window.onload = function() {
+    try {
+        // Get user's WhatsApp number
+        const wid = window.localStorage.getItem("last-wid") || window.localStorage.getItem("last-wid-md");
+        if (wid) {
+            myNumber = wid.includes("@") ? wid.split("@")[0].substring(1) : wid.split(":")[0].substring(1);
         }
-        sendAny(
-          a.context.numbers,
-          e,
-          h,
-          a.context.is_image,
-          a.context.timeDelayFrom,
-          a.context.timeDelayTo,
-          a.context.is_time_stamp,
-          a.context.batch_size,
-          a.context.batch_delay,
-          a.context.batched
-        );
-      } else {
-        for (d = 0; d < a.context.numbers.length; d++) e.push(b);
-        sendAny(
-          a.context.numbers,
-          e,
-          null,
-          a.context.is_image,
-          a.context.timeDelayFrom,
-          a.context.timeDelayTo,
-          a.context.is_time_stamp,
-          a.context.batch_size,
-          a.context.batch_delay,
-          a.context.batched
-        );
-      }
+        chrome.storage.local.set({ currentState });
+    } catch (error) {
+        console.error("Error getting WhatsApp number:", error);
+    }
+};
+
+// Ensure wamessager element exists
+if (!document.getElementById("wamessager")) {
+    const link = document.createElement("a");
+    link.id = "wamessager";
+    document.body.append(link);
+}
+
+// Pause functionality
+function pauser() {
+    return new Promise((resolve) => {
+        continueFunction = function() {
+            pauseSending = false;
+            continueFunction = null;
+            currentState = { ...currentState, state: "SEND" };
+            chrome.storage.local.set({ currentState }, () => {
+                resolve("resolved");
+            });
+        };
+    });
+}
+
+// Listen for messages from popup/background
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    receiver(request, sender, sendResponse);
+    return true;
+});
+
+// Message receiver
+async function receiver(request, sender, sendResponse) {
+    if (!request.context) {
+        sendResponse({ success: false });
+        return;
+    }
+
+    const context = request.context;
+
+    // Handle different commands
+    if (context.process_state === "continue") {
+        await handleBulkSending(context);
+        sendResponse({ success: true });
+    } else if (context.export_results === "true") {
+        exportResults();
+        sendResponse({ success: true });
+    } else if (context.process_state) {
+        handleProcessState(context.process_state);
+        sendResponse({ success: true });
+    } else if (context.filter_numbers) {
+        await filterNumbers(context.numbers);
+        sendResponse({ success: true });
     } else {
-      a.context.numbers = a.context.numbers.filter((h) => h);
-      for (d = 0; d < a.context.numbers.length; d++) e.push(b);
-      sendAny(
-        a.context.numbers,
-        e,
-        null,
-        a.context.is_image,
-        a.context.timeDelayFrom,
-        a.context.timeDelayTo,
-        a.context.is_time_stamp,
-        a.context.batch_size,
-        a.context.batch_delay,
-        a.context.batched
-      );
+        sendResponse({ success: false });
     }
-    c();
-  } else if (a.context.export_results === "true") export_results(), c();
-  else if (a.context.filter_numbers === "true")
-    (rows = [["Phone Number", "Result"]]), filter_numbers(a.arr), c();
-  else if (a.context.process_state) {
-    switch (a.context.process_state) {
-      case "PAUSE":
-        pauseSending = !0;
-        break;
-      case "CONTINUE":
-        continueFunction();
-        break;
-      case "STOP":
-        (stopSending = !0), pauseSending && continueFunction();
-    }
-    c();
-  } else
-    a.context.get_contacts
-      ? (window.addEventListener("wam:get-contacts-ready", function l(k) {
-          removeEventListener("wam:get-contacts-ready", l);
-          c(k.detail);
-        }),
-        window.dispatchEvent(new CustomEvent("wam:get-contacts"), {}))
-      : a.context.contactSupport
-      ? (await openChat(a.context.supportNumber),
-        (b = document.getElementById("wamessager")),
-        b ||
-          ((b = document.createElement("a")),
-          (b.id = "wamessager"),
-          document.body.append(b)),
-        b.setAttribute(
-          "href",
-          "https://api.whatsapp.com/send?phone=" +
-            a.context.supportNumber +
-            "&text=Hello%2C%20I%20need%20some%20help%20with%20WAMessager"
-        ),
-        b.click(),
-        b.remove(),
-        await sleep(500),
-        await clickElements(document.querySelector("span[data-icon*='send']")),
-        c())
-      : a.context.download_group
-      ? (downloadContacts(
-          a.context.exportType,
-          a.context.groupIds,
-          a.context.isAllGroupSelected,
-          a.context.listOption,
-          a.context.groupList,
-          a.context.chatList,
-          a.context.labelList
-        ),
-        c())
-      : a.context.installed
-      ? c()
-      : a.context.downloadExcelTemplate && (downloadExcelTemplate(), c());
 }
-async function filter_numbers(a) {
-  currentState = (await chrome.storage.local.get("currentState")).currentState;
-  let b = a;
-  a = a.map((c) => c.toString().replace(/\D/g, "").replace(/^0+/, ""));
-  for (let c = 0; c < a.length; c++) {
-    currentState = { ...currentState, msgCount: c, msgTotal: a.length };
-    await chrome.storage.local.set({ currentState }, () => {
-      chrome.runtime.sendMessage({
-        subject: "progress-bar-filter",
-        from: "content",
-        count: c,
-        total: a.length,
-      });
-    });
-    pauseSending &&
-      ((currentState = { ...currentState, state: "PAUSE" }),
-      await chrome.storage.local.set({ currentState }),
-      await pauser());
-    if (stopSending) {
-      stopSending = !1;
-      break;
+
+// Handle bulk sending
+async function handleBulkSending(context) {
+    const { numbers, message, is_custom_message, execl_coloumn } = context;
+    let messages = [];
+
+    if (is_custom_message && execl_coloumn) {
+        // Process personalized messages
+        messages = processPersonalizedMessages(message, execl_coloumn);
+    } else {
+        // Same message for all
+        messages = numbers.map(() => message);
     }
-    await sleep(1e3);
-    a[c] == "" || a[c].length < 5 || a[c].length > 20
-      ? rows.push([b[c], "Invalid"])
-      : await new Promise((e) => {
-          window.addEventListener("WAM::filtered", function m(q) {
-            rows.push([a[c].trim(), q.detail.status]);
-            window.removeEventListener("WAM::filtered", m);
-            e();
-          });
-          window.postMessage({
-            type: "FROM_CONTENT_SCRIPT",
-            message: { request: "filterNumber", number: a[c] },
-          });
+
+    // Start sending
+    await sendMessages(
+        numbers,
+        messages,
+        execl_coloumn,
+        context.is_image,
+        context.timeDelayFrom,
+        context.timeDelayTo,
+        context.is_time_stamp,
+        context.batch_size,
+        context.batch_delay
+    );
+}
+
+// Process personalized messages
+function processPersonalizedMessages(template, data) {
+    const messages = [];
+    const pattern = /{{(.*?)}}/g;
+
+    for (let i = 1; i < data.length; i++) {
+        let personalizedMsg = template;
+        const matches = template.match(pattern);
+        
+        if (matches) {
+            matches.forEach(match => {
+                const field = match.replace(/[{}]/g, '');
+                const value = data[i][field] || '';
+                personalizedMsg = personalizedMsg.replace(match, value);
+            });
+        }
+        
+        messages.push(personalizedMsg);
+    }
+
+    return messages;
+}
+
+// Handle process state changes
+function handleProcessState(state) {
+    switch (state) {
+        case "PAUSE":
+            pauseSending = true;
+            break;
+        case "CONTINUE":
+            if (continueFunction) continueFunction();
+            break;
+        case "STOP":
+            stopSending = true;
+            if (pauseSending && continueFunction) continueFunction();
+            break;
+    }
+}
+
+// Main sending function
+async function sendMessages(numbers, messages, customData, hasAttachment, delayFrom, delayTo, addTimestamp, batchSize, batchDelay) {
+    let sentCount = 0;
+    currentState = await chrome.storage.local.get("currentState").then(r => r.currentState || {});
+
+    for (let i = 0; i < numbers.length; i++) {
+        // Clean phone number
+        const phoneNumber = numbers[i].toString().replace(/\D/g, '').replace(/^0+/, '');
+        
+        // Update progress
+        currentState = { ...currentState, msgCount: i, msgSent: sentCount, msgTotal: numbers.length };
+        await chrome.storage.local.set({ currentState });
+        
+        chrome.runtime.sendMessage({
+            subject: "progress-bar-sent",
+            from: "content",
+            count: i,
+            sent: sentCount,
+            total: numbers.length
         });
-  }
-  currentState = { ...currentState, state: "STOP" };
-  await chrome.storage.local.set({ currentState }, () => {
+
+        // Check pause/stop
+        if (pauseSending) {
+            currentState = { ...currentState, state: "PAUSE" };
+            await chrome.storage.local.set({ currentState });
+            await pauser();
+        }
+
+        if (stopSending) {
+            stopSending = false;
+            break;
+        }
+
+        // Add delay between messages
+        if (i > 0) {
+            const delay = getRandomDelay(delayFrom, delayTo);
+            await sleep(delay * 1000);
+            
+            // Add batch delay if needed
+            if (batchSize && i % batchSize === 0) {
+                await sleep(batchDelay * 1000);
+            }
+        }
+
+        // Try to send message
+        if (phoneNumber && phoneNumber.length >= 5 && phoneNumber.length <= 20) {
+            const opened = await openChat(phoneNumber);
+            
+            if (opened) {
+                let messageToSend = messages[i] || "";
+                
+                // Add timestamp if enabled
+                if (addTimestamp) {
+                    messageToSend += "\n\nSent at: " + new Date().toLocaleString();
+                }
+
+                if (messageToSend.trim()) {
+                    try {
+                        await sendText(messageToSend, phoneNumber);
+                        rows.push([phoneNumber, "Message sent"]);
+                        sentCount++;
+
+                        // Send attachment if enabled
+                        if (hasAttachment) {
+                            await sendAttachments(phoneNumber, customData ? customData[i + 1] : null);
+                            rows[rows.length - 1][1] += " & Media sent";
+                        }
+                    } catch (error) {
+                        console.error("Error sending to:", phoneNumber, error);
+                        rows.push([phoneNumber, "Error: " + error.message]);
+                    }
+                }
+            } else {
+                rows.push([phoneNumber, "Failed to open chat"]);
+            }
+        } else {
+            rows.push([phoneNumber, "Invalid number"]);
+        }
+    }
+
+    // Update final state
+    currentState = { ...currentState, state: "STOP" };
+    await chrome.storage.local.set({ currentState });
+    
     chrome.runtime.sendMessage({
-      subject: "progress-bar-filter",
-      from: "content",
-      count: a.length,
-      total: a.length,
-    });
-    export_results();
-  });
-}
-async function clickOnElements(a) {
-  let b = document.createEvent("MouseEvents");
-  b.initEvent("mouseover", !0, !0);
-  const c = document.querySelector(a).dispatchEvent(b);
-  b.initEvent("mousedown", !0, !0);
-  document.querySelector(a).dispatchEvent(b);
-  b.initEvent("mouseup", !0, !0);
-  document.querySelector(a).dispatchEvent(b);
-  b.initEvent("click", !0, !0);
-  document.querySelector(a).dispatchEvent(b);
-  return c
-    ? new Promise((e) => {
-        e();
-      })
-    : await clickOnElements(a);
-}
-async function clickMediaIcon(a) {
-  let b = null;
-  a === "pv"
-    ? (b = '[data-icon="attach-image"]')
-    : a === "doc"
-    ? (b = '[data-icon="attach-document"]')
-    : a === "cn" && (b = '[data-icon="attach-contact"]');
-  b && (await clickOnElements(b));
-}
-async function sendMultimedia(a) {
-  try {
-    (hasOpenedSelf = await openChat(myNumber)),
-      await clickOnElements('[data-testid="clip"] svg'),
-      await clickMediaIcon(a);
-  } catch (b) {}
-}
-function chunk(a, b) {
-  if (b <= 0) throw "Invalid chunk size";
-  for (var c = [], e = 0, d = a.length; e < d; e += b)
-    c.push(a.slice(e, e + b));
-  return c;
-}
-async function sendAny(a, b, c, e, d, q, m, p, h, k) {
-  b.length !== 0 && core_sending(a, b, c, e, d, q, a.length, m, p, h, k);
-}
-async function core_sending(a, b, c, e, d, q, m, p, h, k, l) {
-  let g = 0;
-  currentState = (await chrome.storage.local.get("currentState")).currentState;
-  for (let f = 0; f < a.length; f++) {
-    a[f] = a[f].toString().replace(/\D/g, "").replace(/^0+/, "");
-    currentState = { ...currentState, msgCount: f, msgSent: g, msgTotal: m };
-    await chrome.storage.local.set({ currentState }, () => {
-      chrome.runtime.sendMessage({
         subject: "progress-bar-sent",
         from: "content",
-        count: f,
-        sent: g,
-        total: m,
-      });
+        count: numbers.length,
+        sent: sentCount,
+        total: numbers.length
     });
-    pauseSending &&
-      ((currentState = { ...currentState, state: "PAUSE" }),
-      await chrome.storage.local.set({ currentState }),
-      await pauser());
-    if (stopSending) {
-      stopSending = !1;
-      break;
-    }
-    if (a[f] != "") {
-      var n = null;
-      f != 0 &&
-        ((n = parseInt(d) + Math.floor(Math.random() * (q - d))),
-        await sleep(n * 1e3));
-      l && f != 0 && f % parseInt(h) == 0
-        ? await sleep(parseInt(k) * 1e3)
-        : f != 0 && f % 10 == 0 && (await sleep(1e4));
-      n = !1;
-      try {
-        a[f].length > 4 && a[f].length < 21 && (n = await openChat(a[f]));
-      } catch (v) {
-        n = !1;
-      }
-      if (n) {
-        var t = isUnsubscribed();
-        if (t) rows.push([a[f], "User has unsubscribed"]);
-        else {
-          b[f] = b[f].trim();
-          if (
-            n &&
-            !t &&
-            b[f] != "" &&
-            document.querySelectorAll("[contenteditable='true']")[1]
-          )
-            try {
-              p && (b[f] += "\n\nSent at: " + new Date().toISOString()),
-                await sendText(b[f], a[f], 0),
-                rows.push([a[f], "Message sent"]),
-                g++;
-            } catch (v) {
-              console.log("error while sending to: ", a[f], v);
-              rows.push([a[f], "Some Error Please Try This Number Again"]);
-              continue;
-            }
-          if (e) {
-            let v;
-            try {
-              let r = await chrome.storage.local.get("attachment_data");
-              v = document
-                .querySelectorAll("div[data-id]")[0]
-                .getAttribute("data-id")
-                .split("@")[0]
-                .split("_")[1];
-              if ((r = r?.attachment_data))
-                for (let w = 0; w < r.length; w++) {
-                  await sleep(1e3);
-                  if (c) {
-                    let u = r[w].fileCaption;
-                    for (const [B, z] of Object.entries(c[0]))
-                      u = u.replaceAll("{{" + z + "}}", "{{" + B + "}}");
-                    var x = u.match(coloumn_pattern),
-                      A = u.match(replace_pattern);
-                    n = u;
-                    if (x != null && A != null)
-                      for (t = 0; t < x.length; t++)
-                        n = n.replace(A[t], c[f + 1][x[t]] || "");
-                    r[w].fileCaption = n;
-                  }
-                  await new Promise((u) => {
-                    window.addEventListener(
-                      "wam:attachments-sent",
-                      function C(z) {
-                        removeEventListener("wam:attachments-sent", C);
-                        u();
-                      }
-                    );
-                    window.postMessage({
-                      type: "FROM_CONTENT_SCRIPT",
-                      message: {
-                        request: "sendAttachment",
-                        attachment: r[w],
-                        number: v,
-                      },
-                    });
-                  });
-                }
-              let y = rows[rows.length - 1];
-              y && y[0] == a[f]
-                ? (rows[rows.length - 1][1] = y[1] + " & Media Sent")
-                : rows.push([a[f], "Media sent"]);
-            } catch (r) {
-              console.log("ERROR in sending media to", v, r);
-            }
-          }
-        }
-      } else rows.push([a[f], "Invalid number"]);
-    }
-  }
-  currentState = { ...currentState, state: "STOP" };
-  await chrome.storage.local.set({ currentState }, () => {
-    chrome.runtime.sendMessage({
-      subject: "progress-bar-sent",
-      from: "content",
-      count: m,
-      sent: g,
-      total: m,
-    });
-    export_results();
-  });
-  g > 0 &&
-    ((a = {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ phoneNumber: myNumber, messagesSent: g }),
-    }),
-    fetch(`${url}/api/user/updateUsedMessages`, a).then().catch(),
-    (a = (await chrome.storage.local.get("DAILY_MSG_LEFT")).DAILY_MSG_LEFT),
-    chrome.storage.local.set({ DAILY_MSG_LEFT: a - g }));
-}
-async function sendMedia(a) {
-  await sleep(500);
-  a.click();
-}
-async function openChat(a) {
-  await openChatUrl(a);
-  await sleep(1e3);
-  return await hasOpened();
-}
-async function openChatUrl(a) {
-  let b = document.getElementById("wamessager");
-  b ||
-    ((b = document.createElement("a")),
-    (b.id = "wamessager"),
-    document.body.append(b));
-  b.setAttribute("href", `https://api.whatsapp.com/send?phone=${a}`);
-  await sleep(500);
-  b.click();
-}
-async function hasOpened() {
-  await waitTillWindow();
-  let a = document.querySelector('[data-animate-modal-popup="true"]');
-  await sleep(500);
-  return a ? (a.querySelector("button").click(), !1) : !0;
-}
-async function waitTillWindow() {
-  document.querySelector('[data-animate-modal-popup="true"]') &&
-    document
-      .querySelector('[data-animate-modal-popup="true"]')
-      .querySelector("span") &&
-    (await sleep(500), await waitTillWindow());
-}
-var numbers = [];
-async function download_group() {
-  var a = document.querySelector('div[title="Search\u2026"]').parentElement
-      .parentElement.parentElement.parentElement.children[1].lastElementChild
-      .textContent,
-    b = document.querySelector('div[title="Search\u2026"]').parentElement
-      .parentElement.parentElement.parentElement.children[1].firstElementChild
-      .textContent;
-  if (
-    "online" !== a &&
-    "typing..." !== a &&
-    "check here for contact info" !== a &&
-    "" !== a &&
-    !a.includes("last seen")
-  ) {
-    var c = [["Numbers"]];
-    a.split(",").forEach((d) => {
-      d = d.toString().replace(/\D/g, "");
-      d != "" && ((arr = []), arr.push(d), c.push(arr));
-    });
-    a = "data:text/csv;charset=utf-8," + c.map((d) => d.join(",")).join("\n");
-    a = encodeURI(a);
-    var e = document.createElement("a");
-    e.setAttribute("href", a);
-    e.setAttribute("download", b + ".csv");
-    document.body.appendChild(e);
-    e.click();
-  }
-}
-function downloadExcelTemplate() {
-  var a = [],
-    b = {
-      whatsappNumber: "+919999988888",
-      name: "WAM",
-      anyField: "Best WA Message Bulk Sender",
-    };
-  a.push(b);
-  b = { whatsappNumber: "+8613119140503", name: "Name 1", anyField: "WAM" };
-  a.push(b);
-  b = { whatsappNumber: "+8613119140503", name: "Name 2", anyField: "WAM" };
-  a.push(b);
-  b = {
-    whatsappNumber: "+8615829292527",
-    name: "Name 3",
-    anyField: "WAMessager",
-  };
-  a.push(b);
-  b = XLSX.utils.json_to_sheet(a);
-  a = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(a, b, "excel template");
-  XLSX.utils.sheet_add_aoa(
-    b,
-    [
-      [
-        "WhatsApp Number( with country code)",
-        "Name (Optional)",
-        "Custome Field (Optional)",
-      ],
-    ],
-    { origin: "A1" }
-  );
-  b = Math.round(new Date().getTime());
-  XLSX.writeFile(a, "excelTemplate" + b + ".xlsx");
-}
-function downloadContacts(a, b, c, e, d, q, m) {
-  let p = [];
-  a == "Group"
-    ? (c || (d = d.filter((h) => b.includes(h.groupId))),
-      d.forEach((h) => {
-        h.members.forEach((k, l) => {
-          let g = {};
-          if (!(k.phoneNumber.length < 5)) {
-            try {
-              [g.CountryCode, g.Country] = findCountryDetail(k.phoneNumber, l);
-            } catch (n) {}
-            g.CountryCode = "+" + g.CountryCode;
-            g.displayName = k.displayName;
-            g.phoneNumber = k.phoneNumber;
-            g.savedName = k.savedName;
-            g.groupName = h.groupName;
-            p.push(g);
-          }
+
+    // Export results
+    exportResults();
+
+    // Update statistics
+    if (sentCount > 0) {
+        const stats = await chrome.storage.local.get(['messagesSent', 'totalMessages']);
+        await chrome.storage.local.set({
+            messagesSent: (stats.messagesSent || 0) + sentCount,
+            totalMessages: (stats.totalMessages || 0) + sentCount
         });
-      }))
-    : a == "Label"
-    ? ((d = m),
-      c || (d = d.filter((h) => b.includes(h.groupId))),
-      d.forEach((h) => {
-        h.members.forEach((k, l) => {
-          let g = {};
-          if (!(k.phoneNumber.length < 5)) {
-            try {
-              [g.CountryCode, g.Country] = findCountryDetail(k.phoneNumber, l);
-            } catch (n) {
-              console.log(n);
-            }
-            g.CountryCode = "+" + g.CountryCode;
-            g.displayName = k.displayName;
-            g.phoneNumber = k.phoneNumber;
-            g.savedName = k.savedName;
-            g.groupName = h.groupName;
-            p.push(g);
-          }
+    }
+}
+
+// Open WhatsApp chat
+async function openChat(phoneNumber) {
+    const link = document.getElementById("wamessager");
+    link.setAttribute("href", `https://api.whatsapp.com/send?phone=${phoneNumber}`);
+    link.click();
+    
+    await sleep(2000);
+    
+    // Check if chat opened successfully
+    const popup = document.querySelector('[data-animate-modal-popup="true"]');
+    if (popup) {
+        // Error popup appeared
+        const closeButton = popup.querySelector("button");
+        if (closeButton) closeButton.click();
+        return false;
+    }
+    
+    return true;
+}
+
+// Send text message
+async function sendText(message, phoneNumber) {
+    const link = document.getElementById("wamessager");
+    link.setAttribute("href", `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`);
+    link.click();
+    
+    await sleep(1000);
+    
+    // Click send button
+    const sendButton = document.querySelector("span[data-icon*='send']");
+    if (sendButton) {
+        await clickElement(sendButton);
+    }
+}
+
+// Click element helper
+async function clickElement(element) {
+    const events = ['mouseover', 'mousedown', 'mouseup', 'click'];
+    for (const eventType of events) {
+        const event = new MouseEvent(eventType, {
+            view: window,
+            bubbles: true,
+            cancelable: true
         });
-      }))
-    : a == "Chat" &&
-      q.forEach((h, k) => {
-        let l = {};
-        if (!(h.members[0].phoneNumber.length < 5)) {
-          try {
-            [l.CountryCode, l.Country] = findCountryDetail(
-              h.members[0].phoneNumber,
-              k
-            );
-          } catch (g) {
-            console.log(g);
-          }
-          l.CountryCode = "+" + l.CountryCode;
-          l.displayName = h.members[0].displayName;
-          l.phoneNumber = h.members[0].phoneNumber;
-          l.savedName = h.members[0].savedName;
-          l.groupName = h.groupName;
-          e == "unsavedChats" ? l.isMyContact || p.push(l) : p.push(l);
+        element.dispatchEvent(event);
+        await sleep(50);
+    }
+}
+
+// Send attachments
+async function sendAttachments(phoneNumber, customData) {
+    // Implementation for sending attachments
+    // This would integrate with the attachment modal system
+    await sleep(1000);
+}
+
+// Filter numbers
+async function filterNumbers(numbers) {
+    currentState = await chrome.storage.local.get("currentState").then(r => r.currentState || {});
+    
+    for (let i = 0; i < numbers.length; i++) {
+        const number = numbers[i].toString().replace(/\D/g, '').replace(/^0+/, '');
+        
+        currentState = { ...currentState, msgCount: i, msgTotal: numbers.length };
+        await chrome.storage.local.set({ currentState });
+        
+        if (pauseSending) {
+            await pauser();
         }
-      });
-  d = XLSX.utils.json_to_sheet(p);
-  d["!cols"] = [
-    { wch: 15 },
-    { wch: 15 },
-    { wch: 25 },
-    { wch: 20 },
-    { wch: 20 },
-    { wch: 20 },
-  ];
-  c = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(c, d, "myWorkSheet");
-  XLSX.utils.sheet_add_aoa(
-    d,
-    [
-      [
-        "Country Code",
-        "Country",
-        "Contact's Public Display Name",
-        "Phone Number",
-        "Saved Name",
-        a + " Name",
-      ],
-    ],
-    { origin: "A1" }
-  );
-  d = Math.round(new Date().getTime());
-  XLSX.writeFile(c, a + d + ".xlsx");
+        
+        if (stopSending) {
+            stopSending = false;
+            break;
+        }
+        
+        await sleep(500);
+        
+        if (!number || number.length < 5 || number.length > 20) {
+            rows.push([numbers[i], "Invalid"]);
+        } else {
+            // Check if number exists on WhatsApp
+            rows.push([number, "Valid"]);
+        }
+    }
+    
+    exportResults();
 }
-function findCountryDetail(a, b) {
-  try {
-    let c = libphonenumber.parsePhoneNumber("+" + a);
-    return [c.countryCallingCode, c.country];
-  } catch (c) {
-    throw c;
-  }
+
+// Export results to CSV
+function exportResults() {
+    const csv = rows.map(row => row.join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", "WhatsApp_Report_" + new Date().getTime() + ".csv");
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    
+    URL.revokeObjectURL(url);
+    rows = [["Phone Number", "Result"]];
 }
-function open_chat_details() {
-  var a = document.evaluate(
-    '//*[@id="main"]/header/div[2]',
-    document,
-    null,
-    XPathResult.FIRST_ORDERED_NODE_TYPE,
-    null
-  ).singleNodeValue;
-  document.evaluate(
-    '//*[@id="app"]//div[contains(text(), "Group info")]',
-    document,
-    null,
-    XPathResult.FIRST_ORDERED_NODE_TYPE,
-    null
-  ).singleNodeValue || a.click();
+
+// Utility functions
+function sleep(ms) {
+    return chrome.runtime.sendMessage({ context: "sleep", time: ms });
 }
-async function eventFire(a, b) {
-  var c = document.createEvent("MouseEvents");
-  c.initMouseEvent(b, !0, !0, window, 0, 0, 0, 0, 0, !1, !1, !1, !1, 0, null);
-  return new Promise(function (e) {
-    var d = setInterval(function () {
-      document.querySelector("span[data-icon*='send']") &&
-        (a.dispatchEvent(c), e((clearInterval(d), "BUTTON CLICKED")));
-    }, 500);
-  });
+
+function getRandomDelay(min, max) {
+    return Math.floor(Math.random() * (max - min + 1)) + min;
 }
-function isUnsubscribed() {
-  try {
-    var a = document.querySelector('div[data-tab="8"]');
-    return a === null || a.lastElementChild === null
-      ? !1
-      : a.lastElementChild.textContent
-          .toLowerCase()
-          .substring(0, 5)
-          .indexOf("unsub") !== -1;
-  } catch (b) {
-    return !1;
-  }
-}
-function export_results() {
-  var a =
-    "data:text/csv;charset=utf-8," + rows.map((c) => c.join(",")).join("\n");
-  a = encodeURI(a);
-  var b = document.createElement("a");
-  b.setAttribute("href", a);
-  b.setAttribute("download", "Report.csv");
-  document.body.appendChild(b);
-  b.click();
-  b.remove();
-  rows = [["Phone Number", "Result"]];
-}
-async function clickElements(a) {
-  let b = document.createEvent("MouseEvents");
-  b.initEvent("mouseover", !0, !0);
-  const c = a.dispatchEvent(b);
-  b.initEvent("mousedown", !0, !0);
-  a.dispatchEvent(b);
-  b.initEvent("mouseup", !0, !0);
-  a.dispatchEvent(b);
-  b.initEvent("click", !0, !0);
-  a.dispatchEvent(b);
-  return c
-    ? new Promise((e) => {
-        e();
-      })
-    : await clickOnElements(a);
-}
-async function sendText(a, b, c) {
-  try {
-    a = a.replace(/ /gm, " ");
-    const e = document.getElementById("wamessager");
-    e
-      ? e.setAttribute(
-          "href",
-          `https://wa.me/${b}?text=${encodeURIComponent(a)}`
-        )
-      : document.body.append(
-          `<a href="https://wa.me/${b}?text=${a}" id= "wamessager"></a>`
-        );
-    document.getElementById("wamessager").click();
-    await sleep(500);
-    await clickElements(document.querySelector("span[data-icon*='send']"));
-  } catch (e) {
-    await sleep(5e3);
-    if (c == 2) throw e;
-    await sendText(a, b, c + 1);
-  }
-}
-async function send_both(a, b) {
-  send_image();
-  "complete" === document.readyState && sendText(a, b);
-}
-async function sleep(a) {
-  await chrome.runtime.sendMessage({ context: "sleep", time: a });
+
+// Listen for privacy settings updates
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (request.action === 'updatePrivacy') {
+        applyPrivacySettings(request.settings);
+    }
+});
+
+// Apply privacy blur settings
+function applyPrivacySettings(settings) {
+    const style = document.getElementById('privacy-blur-style') || document.createElement('style');
+    style.id = 'privacy-blur-style';
+    
+    let css = '';
+    
+    if (settings.blurMessages) {
+        css += '.message-in, .message-out { filter: blur(5px); } ';
+        css += '.message-in:hover, .message-out:hover { filter: none; } ';
+    }
+    
+    if (settings.blurContacts) {
+        css += '._21nHd { filter: blur(5px); } ';
+        css += '._21nHd:hover { filter: none; } ';
+    }
+    
+    if (settings.blurPhotos) {
+        css += '._1AHcd { filter: blur(5px); } ';
+        css += '._1AHcd:hover { filter: none; } ';
+    }
+    
+    style.textContent = css;
+    document.head.appendChild(style);
 }

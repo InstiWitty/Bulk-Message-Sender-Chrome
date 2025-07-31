@@ -1,239 +1,219 @@
-"use strict";
-var suggestionMessages = [
-    "Hello! how can we help you?",
-    "Hello!",
-    "Thank you for using service!",
-  ],
-  total_messages = 0,
-  close_img_src = chrome.runtime.getURL("assets/closeBtn.png");
-chrome.storage.local.get(
-  "blurToggleAll blurAllMessageToggle blurLastMesssageToggle blurMediaPreviewToggle blurMediaGallaryToggle blurTextInputToggle blurProfilePictureToggle blurGroupUserNameToggle noTransitionDelayToggle unblurAllToggle suggestionMessages".split(
-    " "
-  ),
-  function (a) {
-    function b(e) {
-      let d;
-      (d = document.getElementById(e)) && d.parentNode.removeChild(d);
+// load.js - Loads additional UI enhancements
+
+(function() {
+    'use strict';
+    
+    // Add custom UI elements to WhatsApp Web
+    function enhanceWhatsAppUI() {
+        // Add bulk sender button to header
+        addBulkSenderButton();
+        
+        // Add status indicator
+        addStatusIndicator();
+        
+        // Apply saved privacy settings
+        applySavedPrivacySettings();
     }
-    function c(e) {
-      if (!document.getElementById(e)) {
-        var d = document.createElement("link");
-        d.id = e;
-        d.className = "pfwa";
-        d.href = chrome.runtime.getURL("css/addon-css/" + e + ".css");
-        d.type = "text/css";
-        d.rel = "stylesheet";
-        document.getElementsByTagName("head")[0].appendChild(d);
-      }
+    
+    // Add bulk sender button
+    function addBulkSenderButton() {
+        const header = document.querySelector('header');
+        if (header && !document.getElementById('wa-bulk-button')) {
+            const button = document.createElement('div');
+            button.id = 'wa-bulk-button';
+            button.className = 'wa-bulk-button';
+            button.innerHTML = `
+                <svg viewBox="0 0 24 24" width="24" height="24">
+                    <path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                </svg>
+                <span>Bulk Sender</span>
+            `;
+            button.style.cssText = `
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                padding: 8px 16px;
+                margin: 0 12px;
+                background: #25D366;
+                color: white;
+                border-radius: 20px;
+                cursor: pointer;
+                font-size: 14px;
+                font-weight: 500;
+                transition: all 0.3s ease;
+            `;
+            
+            button.addEventListener('click', () => {
+                chrome.runtime.sendMessage({ action: 'openPopup' });
+            });
+            
+            button.addEventListener('mouseenter', () => {
+                button.style.background = '#128C7E';
+                button.style.transform = 'scale(1.05)';
+            });
+            
+            button.addEventListener('mouseleave', () => {
+                button.style.background = '#25D366';
+                button.style.transform = 'scale(1)';
+            });
+            
+            header.appendChild(button);
+        }
     }
-    a.blurAllMessageToggle ? c("messages") : b("messages");
-    a.blurLastMesssageToggle ? c("messagesPreview") : b("messagesPreview");
-    a.blurMediaPreviewToggle ? c("mediaPreview") : b("mediaPreview");
-    a.blurMediaGallaryToggle ? c("mediaGallery") : b("mediaGallery");
-    a.blurTextInputToggle ? c("textInput") : b("textInput");
-    a.blurProfilePictureToggle ? c("profilePic") : b("profilePic");
-    a.blurGroupUserNameToggle ? c("name") : b("name");
-    a.noTransitionDelayToggle ? c("noDelay") : b("noDelay");
-    a.unblurAllToggle ? c("unblurActive") : b("unblurActive");
-    a.suggestionMessages && (suggestionMessages = a.suggestionMessages);
-    setInterval(() => {
-      (document.getElementById("reply_div") &&
-        suggestionMessages.length === total_messages) ||
-        suggestion_messages();
-    }, 2e3);
-  }
-);
-function suggestion_messages() {
-  var a = document.getElementById("reply_div");
-  a && a.parentNode.removeChild(a);
-  var b = document.getElementById("smart_reply_edit_button");
-  b && b.parentNode.removeChild(b);
-  if ((b = document.querySelector("footer"))) {
-    b.style.paddingTop = "40px";
-    a = document.createElement("div");
-    a.id = "reply_div";
-    a.style.width = "";
-    a.style.whiteSpace = "nowrap";
-    a.style.overflowX = "scroll";
-    b.style.backgroundColor = "var(--rich-text-panel-background)";
-    $.each(suggestionMessages, function (d, f) {
-      d = f;
-      f.length > 47 && (d = f.substring(0, 47) + "...");
-      f = $(
-        $.parseHTML(
-          '<button class="reply_click CtaBtn" style="color: var(--message-primary);background-color: var(--outgoing-background);border-radius: 15px;padding: 4px 8px;font-size: 12px;margin-right: 8px;margin-bottom: 4px;" value="' +
-            f +
-            '">' +
-            d +
-            "</button>"
-        )
-      );
-      a.appendChild(f[0]);
+    
+    // Add status indicator
+    function addStatusIndicator() {
+        if (!document.getElementById('wa-status-indicator')) {
+            const indicator = document.createElement('div');
+            indicator.id = 'wa-status-indicator';
+            indicator.className = 'wa-status-indicator';
+            indicator.style.cssText = `
+                position: fixed;
+                bottom: 20px;
+                left: 20px;
+                background: white;
+                padding: 12px 20px;
+                border-radius: 24px;
+                box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+                display: none;
+                align-items: center;
+                gap: 10px;
+                z-index: 1000;
+                font-size: 14px;
+            `;
+            
+            document.body.appendChild(indicator);
+        }
+    }
+    
+    // Update status indicator
+    function updateStatus(status, message) {
+        const indicator = document.getElementById('wa-status-indicator');
+        if (indicator) {
+            let icon = '';
+            let color = '';
+            
+            switch (status) {
+                case 'sending':
+                    icon = '📤';
+                    color = '#25D366';
+                    break;
+                case 'paused':
+                    icon = '⏸️';
+                    color = '#FFC107';
+                    break;
+                case 'stopped':
+                    icon = '⏹️';
+                    color = '#DC3545';
+                    break;
+                case 'complete':
+                    icon = '✅';
+                    color = '#28A745';
+                    break;
+            }
+            
+            indicator.innerHTML = `
+                <span style="font-size: 20px;">${icon}</span>
+                <span style="color: ${color}; font-weight: 500;">${message}</span>
+            `;
+            indicator.style.display = 'flex';
+            
+            if (status === 'complete') {
+                setTimeout(() => {
+                    indicator.style.display = 'none';
+                }, 5000);
+            }
+        }
+    }
+    
+    // Apply saved privacy settings
+    function applySavedPrivacySettings() {
+        chrome.storage.local.get(['privacySettings'], (result) => {
+            if (result.privacySettings) {
+                document.body.classList.toggle('privacy-blur-enabled', 
+                    result.privacySettings.blurMessages || 
+                    result.privacySettings.blurContacts || 
+                    result.privacySettings.blurPhotos
+                );
+            }
+        });
+    }
+    
+    // Listen for status updates
+    chrome.storage.onChanged.addListener((changes, namespace) => {
+        if (changes.currentState) {
+            const state = changes.currentState.newValue;
+            if (state) {
+                switch (state.state) {
+                    case 'SEND':
+                        updateStatus('sending', `Sending: ${state.msgSent || 0}/${state.msgTotal || 0}`);
+                        break;
+                    case 'PAUSE':
+                        updateStatus('paused', 'Sending paused');
+                        break;
+                    case 'STOP':
+                        if (state.msgSent > 0) {
+                            updateStatus('complete', `Sent ${state.msgSent} messages`);
+                        } else {
+                            updateStatus('stopped', 'Sending stopped');
+                        }
+                        break;
+                }
+            }
+        }
     });
-    total_messages = suggestionMessages.length;
-    b.appendChild(a);
-    document
-      .getElementsByClassName("copyable-area")[0]
-      .lastChild.scrollBy(0, 40);
-    var c = $(
-      $.parseHTML(
-        '<button class="CtaBtn" style="width: fit-content; padding-inline:20px; height: fit-content; padding-top:5px; color: var(--message-primary);font-size: 12px !important;" id="smart_reply_edit_button">Edit</button>'
-      )
-    )[0];
-    b.appendChild(c);
-    var e = document.createElement("div");
-    e.style.display = "flex";
-    e.style.justifyContent = "space-between";
-    e.style.position = "absolute";
-    e.style.top = "0";
-    e.style.width = "-webkit-fill-available";
-    e.style.zIndex = "1000";
-    e.style.padding = "8px 12px 0px 12px";
-    e.appendChild(a);
-    e.appendChild(c);
-    b.appendChild(e);
-    if ((b = document.getElementsByClassName("_33LGR")[0]))
-      b.scrollTop = b.scrollHeight;
-    document
-      .getElementById("reply_div")
-      .addEventListener("click", async function (d) {
-        d = d.target.value;
-        d != void 0 && sendSuggestionMessage(d);
-      });
-    document
-      .getElementById("smart_reply_edit_button")
-      .addEventListener("click", function (d) {
-        suggestion_popup();
-      });
-  }
-}
-var sendSuggestionMessage = async (a) => {
-  if (a) {
-    a = a.replace(/<span class='ql-cursor'>.*?<\/span>/g, "");
-    var b = document.querySelectorAll("[contenteditable='true']")[1];
-    new Event("Input", { bubbles: !0, cancelable: !0, composed: !0 });
-    b &&
-      b != void 0 &&
-      (await send_ChatText(a),
-      setTimeout(async function () {
-        await eventFire(
-          document.querySelector('span[data-icon="send"]'),
-          "click"
-        );
-        document.querySelectorAll("[contenteditable='true']")[1].innerHTML ===
-          "" &&
-          setTimeout(async function () {
-            await sendMessage(a);
-          }, 500);
-      }, 200));
-  }
-};
-function send_ChatText(a) {
-  const b = new DataTransfer();
-  b.setData("text", a);
-  a = new ClipboardEvent("paste", { clipboardData: b, bubbles: !0 });
-  document
-    .querySelector(
-      '#main .copyable-area [contenteditable="true"][role="textbox"]'
-    )
-    .dispatchEvent(a);
-}
-function referesh_messages() {
-  var a = document.getElementById("sugg_message_list");
-  a.innerHTML = "";
-  $.each(suggestionMessages, function (b, c) {
-    b = $(
-      $.parseHTML(
-        '<div style="margin: 8px 0px;display: flex;"><div class="popup_list_message" style="color: var(--message-primary);background-color: var(--outgoing-background);padding: 6px 7px 8px 9px;border-radius: 7.5px;margin: 2px 0px;max-width: 400px;margin-right: 8px;cursor: pointer;overflow: auto;">' +
-          c +
-          '</div><button class="delete_message CtaDeleteBtn" style="border: 1px solid red;width: 18px;height: 18px;color: red;border-radius: 50%;font-size: 11px;margin-top: 8px;" value="' +
-          c +
-          '">X</button></div>'
-      )
-    );
-    a.appendChild(b[0]);
-  });
-  chrome.storage.local.set({ suggestionMessages });
-}
-function suggestion_popup() {
-  if (document.getElementsByClassName("modal")[0])
-    document.getElementsByClassName("modal")[0].style.display = "block";
-  else {
-    var a = document.createElement("div");
-    a.className = "modal";
-    var b = document.createElement("div");
-    b.className = "modal-content";
-    b.style.position = "relative";
-    b.style.width = "600px";
-    b.style.maxHeight = "560px";
-    b.style.overflow = "auto";
-    a.appendChild(b);
-    document.querySelector("body").appendChild(a);
-    b.appendChild(
-      $(
-        $.parseHTML(
-          '<div style="font-weight: bold;font-size: 20px;text-align: center;margin-bottom: 24px;color: #000;">Edit/Add quick replies</div>'
-        )
-      )[0]
-    );
-    a = document.createElement("div");
-    a.id = "sugg_message_list";
-    a.style.height = "210px";
-    a.style.overflowY = "auto";
-    a.style.margin = "16px 0px";
-    b.appendChild(a);
-    referesh_messages();
-    b.appendChild(
-      $(
-        $.parseHTML(
-          '<span id="close_edit" class="CtaCloseBtn" style="position: absolute;top: 6px;right: 6px;font-size: 20px;width:14px"><img  class="CtaCloseBtn" src="' +
-            close_img_src +
-            '" style="width: 100%;" alt="x"></span>'
-        )
-      )[0]
-    );
-    b.appendChild(
-      $(
-        $.parseHTML(
-          '<textarea style="width: 400px;height: 100px;padding: 8px;" type="text" id="add_message" placeholder="Type your quick reply here"></textarea>'
-        )
-      )[0]
-    );
-    b.appendChild(
-      $(
-        $.parseHTML(
-          '<button class="CtaBtn" style="background: #62D9C7;border-radius: 2px;padding: 8px 12px;float: right;color: #fff;" id="add_message_btn">Add Template</button>'
-        )
-      )[0]
-    );
-    document
-      .getElementById("close_edit")
-      .addEventListener("click", function (c) {
-        document.getElementsByClassName("modal")[0].style.display = "none";
-      });
-    document
-      .getElementById("sugg_message_list")
-      .addEventListener("click", async function (c) {
-        var e = c.target.value;
-        c.target.localName != "div"
-          ? ((c = suggestionMessages.indexOf(e)),
-            suggestionMessages.splice(c, 1),
-            referesh_messages())
-          : c.target.localName == "div" &&
-            c.target.className == "popup_list_message" &&
-            ((document.getElementsByClassName("modal")[0].style.display =
-              "none"),
-            (c = c.target.innerHTML),
-            c != void 0 && sendSuggestionMessage(c));
-      });
-    document
-      .getElementById("add_message_btn")
-      .addEventListener("click", function (c) {
-        c = document.getElementById("add_message").value;
-        c !== "" &&
-          (suggestionMessages.push(c),
-          referesh_messages(),
-          (document.getElementById("add_message").value = ""));
-      });
-  }
-}
+    
+    // Add keyboard shortcuts
+    document.addEventListener('keydown', (e) => {
+        // Alt + B to open bulk sender
+        if (e.altKey && e.key === 'b') {
+            e.preventDefault();
+            chrome.runtime.sendMessage({ action: 'openPopup' });
+        }
+        
+        // Alt + S to stop sending
+        if (e.altKey && e.key === 's') {
+            e.preventDefault();
+            chrome.runtime.sendMessage({ 
+                context: { process_state: 'STOP' }
+            });
+        }
+    });
+    
+    // Initialize when DOM is ready
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', enhanceWhatsAppUI);
+    } else {
+        enhanceWhatsAppUI();
+    }
+    
+    // Re-initialize on navigation (SPA)
+    const observer = new MutationObserver(() => {
+        enhanceWhatsAppUI();
+    });
+    
+    observer.observe(document.body, {
+        childList: true,
+        subtree: true
+    });
+    
+    // Expose functions to global scope
+    window.WABulkSender = {
+        updateStatus: updateStatus,
+        showNotification: (message, type = 'info') => {
+            const toast = document.createElement('div');
+            toast.className = `wa-toast ${type}`;
+            toast.innerHTML = `
+                <span>${type === 'success' ? '✅' : type === 'error' ? '❌' : 'ℹ️'}</span>
+                <span>${message}</span>
+            `;
+            document.body.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.style.animation = 'slideOut 0.3s ease';
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+    };
+    
+})();
